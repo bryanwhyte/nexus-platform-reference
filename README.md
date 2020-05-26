@@ -10,13 +10,11 @@ I also add a few aliases to my /etc/hosts file to simulate DNS from outside of d
 
 ## Operations
 
-I've set my Docker Desktop to use 4 CPU's, 8 GB of Ram with a 1GB swap.
-
-In addition to Docker Desktop, I recommend installing [Kitematic](https://github.com/docker/kitematic/releases) to help with managing containers and seeing into logs.  I've also used [Dockstation](https://dockstation.io/) as another Docker GUI. 
+I've set my Docker Desktop to use 4 CPU's, 4 GB of Ram with a 1GB swap.
 
 Here is a [cheatsheat](https://www.cheatography.com/gambit/cheat-sheets/docker/) for the Docker Command line.
 
-But I highly reccomend you use VSCode with the Docker extension installed as it provides easy visibility and management of images and containers. I live in VSCode to manage docker imahes, edit the project, and start/stop my environment. https://code.visualstudio.com/docs/azure/docker
+But I highly reccomend you use VSCode with the Docker extension installed as it provides easy visibility and management of images and containers. I live in VSCode to manage docker images, edit the project, and start/stop my environment. https://code.visualstudio.com/docs/azure/docker
 
 #### URL's
 
@@ -25,6 +23,8 @@ But I highly reccomend you use VSCode with the Docker extension installed as it 
 - Nexus IQ Server accessible via http://localhost:8070 or https://iq-server
 - Docker proxy group registry accessible via https://registry.mycompany.com
 - Docker Private Registry accessible via https://registry.mycompany.com:5000  (docker push, not browser. Don't forget to docker login, I always do ;-)
+
+ _NOTE: I'm using a self-signed cert so you'll need to click past tha the first time using HTTPS. Chrome can be particularly difficult but this [article](https://medium.com/@dblazeski/chrome-bypass-net-err-cert-invalid-for-development-daefae43eb12) can help_
 
 #### Persistent Volumes
 
@@ -35,53 +35,37 @@ One last thing before we get started. I've created a convention of putting all o
   + /iq-logs
   + /nexus-data
 ```
+
 It's not clear to me how these work on a windows machine but check your settings for shared drives in Docker Settings. For info check out Getting Started at: https://docs.docker.com/docker-for-windows/
 
 
 ## Initial Setup
 
-First lets start NXRM
+#### First lets start NXRM
 ```
 docker-compose up -d nexus   #Start just the 'nexus' service  
 ```
-You'll need to ge the password from /nexus-data to log in the first time. When going through the wizrd set your new admin password to match the demo-setup scripts (admin123) or change the scripts to match your password.
-The `demo-setup.sh` script is a one time script to config docker and npm within NXRM; prior to running, review the `docker-compose.yml` file and the persistent volume mounts. They are set to work on a linux machine and will need to be changed for a windows based machine. If you look at the script you can see it creates and runs a few setup scripts once NXRM is responding to traffic.
+It can take a minute or two to start. To view the logs I tend to use Kitematic or via the Docker extension in VSCode. Once it is started you should be able to hit it via http://localhost:8081 or if you've updated your /etc/hosts file, http://nexus:8081. Nginx isn't running yet so we can do https with SSL yet.
 
-```
-./demo-setup.sh
-```
+You'll need to ge the password from ~/.demo-pv/nexus-data to log in the first time.
 
-Now lets start IQ
+#### Now lets start IQ
 ```
-docker-compose up -d iq-server
+➜ docker-compose up -d iq-server
+Creating network "npr_default" with the default driver
+Creating npr_iq-server_1 ... done
 ```
-Lets review what just happened:
-```
-docker-compose up -d iq-server  
-Creating network "nexusplatform_default" with the default driver
-Building iq-server
-Step 1/3 : FROM sonatype/nexus-iq-server:1.82.0
- ---> ddb41115c38d
-Step 2/3 : COPY config.yml /etc/nexus-iq-server/
- ---> fef3d1285720
-Step 3/3 : HEALTHCHECK CMD curl http://localhost:8071/ping
- ---> Running in b4ff9fea5d32
-Removing intermediate container b4ff9fea5d32
- ---> b2a26fa8f223
-Successfully built b2a26fa8f223
-Successfully tagged sonatype-se/my-iq-server:1.82.0
-WARNING: Image for service iq-server was built because it did not already exist. To rebuild this image you must use `docker-compose build` or `docker-compose up --build`.
-Creating nexusplatform_iq-server_1 ... done
-```
-The first thing we see is that docke-compose creates 'network', then it builds the IQ server container because the image didn't already exist. We make a custome image so that we can modify the 'config.yml' as needed which is copied in in step 2. Once it is built it is tagged with our image name and then run and added to the network, nexusplatform_default. Docker provides DNS names within this network so that containers can talk to each other on that network.
+The first thing we see is that docke-compose creates 'network', named 'npr_default' (because I put the project in a folder named npr to shorten the name). If you haven't changed the folder name you'll see 'nexus_platform_reference_default' for a network name. This is the same network that NXRM was put on so they'll be able to talk to each other.
 
-Now you can log in as admin/admin123 and install license key into IQ. You'll also want to install that license into NXRM if you have a license for Firewall or NXRM Pro. In Nexus RM you can configure NXRM to talk to IQ at http://iq-server:8070, the reason iq-server is also in etc/hosts is so that when you click on a firewall link, it will also resolve in your browser (which is outside of docker and doesn't have the same DNS suuport, so we just mimic it).
+Now you can log in as admin/admin123 at http://localhost:8070. The first thing you're greated with in IQ is the need to install a license. You'll also want to install that license into NXRM if you have a license for Firewall or NXRM Pro. In Nexus RM you can configure NXRM to talk to IQ at http://iq-server:8070, the reason iq-server is also in etc/hosts is so that when you click on a firewall link, it will also resolve in your browser (which is outside of docker and doesn't have the same DNS suuport, so we just mimic it). If you haven't updated your /etc/hosts file yet, now is the time! ;-)
 
-The last piece is to start the Nginx proxy assuming you've already edited your etc.hosts file
+Since this project supports training and PoC environments, we have externalized the config.yml file from the container by mounting the project folder in addition to the persistent volumes. I already set the BaseURL in this projects config.yml file, but if you want or need to make a change to it all you have to do is stop the container, make and edit then restart to pick up the changes.
+
+The last piece is to start the Nginx proxy assuming you've already edited your etc.hosts file ;-)
 ```
-docker-compose up -d nginx-proxy
+docker-compose up -d demo
 ```
-This container makes it's own self-signed cert so you'll have to push past the warning in your browser
+This container makes it's own self-signed cert so you'll have to push past the warning in your browser. If Chrome doesn't want to let you past you just need to click on the window and type "thisisusafe" ENTER.
 
 You should now have a fully functioning Nexus Platform
 
@@ -91,20 +75,41 @@ To stop, use docker-compose:
 docker-compose down
 ```
 
-Subsequent runs can use docker-compose and don't require the demo-setup.sh:
+Subsequent runs can use docker-compose to start the 'demo' service which is nginx which in turn depends on IQ and NXRM
 
 ```
-docker-compose up -d nginx-proxy     #Starts NXRM and IQ with nginx because of the 'depends on' parameter
-docker-compose up -d                 #starts everything
+docker-compose up -d demo      #Starts NXRM and IQ with nginx because of the 'depends on' parameter
 ```
 
+One of the advantages of docker-compose, in addition to all the typing it saves, when you run 'docker-compose down' it cleans up everything as well. It both stops and removes all of the containers and finishes by removing the network it created.
+
+```
+➜ docker-compose down                                                            
+Stopping npr_demo_1      ... done
+Stopping npr_iq-server_1 ... done
+Stopping npr_nexus_1     ... done
+Removing npr_demo_1      ... done
+Removing npr_iq-server_1 ... done
+Removing npr_nexus_1     ... done
+Removing network npr_default
+```
+
+#### Docker CLI equivalent
+
+If your more of a CLI person, here are all of the commands you'd have to run to recreate what 'docker-compose up -d demo does:
+```
+docker network create npr_default
+docker run --network=npr_default -v ~/.demo-pv/nexus-data:/nexus-data -p 8081:8081 -p 18443:18443 sonatype/nexus3:3.23.0
+docker run --network=npr_default -v ~/.demo-pv/iq-data:/sonatype-work -v ~/.demo-pv/iq-logs:/opt/sonatype/nexus-iq-server/log -v .:/etc/nexus-iq-server/ -p 8070:8070 -p 8071:8071 sonatype/nexus-iq-server:1.91.0
+docker run --network=npr_default -p 443:443 -p 5000:5000 -p 8011:8011 sonatype-se/sonatype_nginx-proxy:2.6.3 <-- Note- this needs to be built and tagged first
+```
 #### SSL Certificates
 
 The Ngnix docker image build process generates insecure SSL certificates with fake location information and CNAME of localhost. Understand the risks of using these SSL certificates before proceeding. A deployed solution should use a valid CA certificate.
 
 ## Advanced
 
-There are additional services defined within the docker-compose file but commented out to ease getting started. In addition to Jenkins that was mentioned earlie, there are also services defined for Victoria, Clair, Anchore, JIRA, and Webhook Listener examples.
+There are additional services defined within the docker-compose file, some commented out but other ready to run. In addition to Jenkins that was mentioned earlier, there are also services defined for Victoria, Clair, Anchore, JIRA, and Webhook Listener examples.
 
 #### Upgrading Software
 
@@ -116,11 +121,9 @@ I run Jenkins outside of Docker (local app) which allow it to hit the Nexus repo
 
 
 #### JIRA
-Here we use the public JIRA image so I just followed their documentation. Once running go through the wizard and you'll need to gewt a license from Atlassian ( https://www.atlassian.com/purchase/product/jira-software ). It is $10/yr for a 10 user license of JRA Software 'Server'.
+Here we use the public JIRA image so I just followed their documentation. Once running go through the wizard and you'll need to gewt a license from Atlassian ( https://www.atlassian.com/purchase/product/jira-software ). It is $10/yr for a 10 user license of JIRA Software 'Server'.
 
-If you look at the config.yml in iq-server yu;ll see section for JIRA. I don't believe this is used anymore as the new integration uses a plugin and a webhook.
-
-IRA will come up on localhost:8080 but I've added jira to etc/host to match the docker dns name. You should be able to hit at jira:8080 and then set it's base url to match to make the 'gadgets' error go away.
+JIRA will come up on localhost:8080 but I've added jira to etc/host to match the docker dns name. You should be able to hit at http://jira:8080 and then set it's base url to match to make the 'gadgets' error go away.
 
 #### Microfocus Software Security Center (SSC)
 The container for this is in a private MF repo that you need to have access to and is targeted for Micro Focus and Sonatype technical sales and training folks. Once you have access and a trial license here is how to get it running

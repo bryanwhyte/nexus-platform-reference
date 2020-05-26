@@ -1,6 +1,6 @@
 version: '3'
 services:
-   nginx-proxy:
+   demo:
      build: ./nginx
      image: 'sonatype-se/sonatype_nginx-proxy:2.6.3'
      ports:
@@ -14,9 +14,9 @@ services:
      depends_on:
        - iq-server
        - nexus
-      
+
    nexus:
-     image: 'sonatype/nexus3:3.21.1'
+     image: 'sonatype/nexus3:3.23.0'
      volumes:
        - '~/.demo-pv/nexus-data:/nexus-data:delegated'
      ports:
@@ -24,11 +24,11 @@ services:
        - '18443:18443'
 
    iq-server:
-     image: 'sonatype-se/my-iq-server:1.87.0'
-     build: ./iq-server
+     image: 'sonatype/nexus-iq-server:1.91.0'
      volumes:
        - '~/.demo-pv/iq-data:/sonatype-work:delegated'
        - '~/.demo-pv/iq-logs:/opt/sonatype/nexus-iq-server/log:delegated'
+       - '.:/etc/nexus-iq-server/:delegated'
      ports:
        - '8070:8070' 
        - '8071:8071'
@@ -53,20 +53,20 @@ services:
        - '9080:8080'
        - '50000:50000'
 
-# # Clair Local scans https://hub.docker.com/r/arminc/clair-local-scan
-#    clair-db:
-#      # near-daily updates https://hub.docker.com/r/arminc/clair-db/tags
-#      image: arminc/clair-db:2019-11-11
-#      ports:
-#        - '5432:5432'
-#    clair:
-#      image: arminc/clair-local-scan:v2.0.8_fe9b059d930314b54c78f75afe265955faf4fdc1
-#      ports:
-#        - '6060:6060'
-#      links:
-#        - clair-db:postgres
-#      depends_on:
-#        - clair-db
+# Clair Local scans https://hub.docker.com/r/arminc/clair-local-scan
+   clair-db:
+     # near-daily updates https://hub.docker.com/r/arminc/clair-db/tags
+     image: arminc/clair-db:2020-03-22
+     ports:
+       - '5432:5432'
+   clair:
+     image: arminc/clair-local-scan:latest
+     ports:
+       - '6060:6060'
+     links:
+       - clair-db:postgres
+     depends_on:
+       - clair-db
 
 ## Webhook listener
 #    listener:
@@ -137,25 +137,25 @@ services:
   #    image: sonatype-se/golang:compose
 
 ## Fortify on-premise integration
-   #The Integration Servicve connects IQ to Fortify SSC
-   intSvc:
-     image: 'cmyanko/nexus-ssc-integration:19.1.0.10'
-     build: ./intSvc
-     depends_on:
-       - ssc
-       - iq-server
-     ports:
-       - '8182:8182'
-     volumes:
-       - '~/.demo-pv/intSvcWorkFolder:/home/nexus/work:delegated'
+   #The Integration Service connects IQ to Fortify SSC
+  #  intSvc:
+  #    image: 'cmyanko/nexus-ssc-integration:19.1.0.12'
+  #    build: ./intSvc
+  #    depends_on:
+  #      - ssc
+  #      - iq-server
+  #    ports:
+  #      - '8182:8182'
+  #    volumes:
+  #      - '~/.demo-pv/intSvcWorkFolder:/home/nexus/work:delegated'
 
-   # The SSC container is a private container for Microfocus and Sonatype employees
-   # for use in Demo's and PoC's    
-   ssc:
-      image: 'fortifydocker/sscdemo'
-      ports:
-       - '8888:8080'
-      volumes:
-       - '~/.demo-pv/fortify:/fortify:delegated'
-      environment:
-       - SSC_MAX_MEM_MB=4096
+  #  # The SSC container is a private container for Microfocus and Sonatype employees
+  #  # for use in Demo's and PoC's    
+  #  ssc:
+  #     image: 'fortifydocker/sscdemo'
+  #     ports:
+  #      - '8888:8080'
+  #     volumes:
+  #      - '~/.demo-pv/fortify:/fortify:delegated'
+  #     environment:
+  #      - SSC_MAX_MEM_MB=4096
